@@ -8,7 +8,7 @@
 
 <div style='display:flex; gap: 0.25rem; '>
 <a href='/doc/jointavbench.pdf'><img src='https://img.shields.io/badge/arXiv-PDF-red'></a>
-<a href='https://jointavbench.gihub.io'><img src='https://img.shields.io/badge/project-page-purple'></a>
+<a href='https://jointavbench.github.io'><img src='https://img.shields.io/badge/project-page-purple'></a>
 <a href='https://huggingface.co/BrianatCambridge/video-SALMONN-o1'><img src='https://img.shields.io/badge/huggingface-dataset-yellow'></a>
 </div>
 
