@@ -69,7 +69,7 @@ JointAVBench consists of **2,853 questions** across **15 distinct tasks** spanni
 ### 🎨 Example Questions
 
 <div align="center">
-  <img src="images/examples.png" alt="Example questions from JointAVBench" width="90%">
+  <img src="images/examples.jpg" alt="Example questions from JointAVBench" width="90%">
   <p><em>Sample questions from different task categories showcasing the diversity of our benchmark</em></p>
 </div>
 
