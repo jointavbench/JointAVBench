@@ -1,8 +1,11 @@
+import os
 import soundfile as sf
 from kimia_infer.api.kimia import KimiAudio
 
-def load_model(device):
-    model_path = "/data-01/jianghan/.cache/huggingface/hub/models--moonshotai--Kimi-Audio-7B-Instruct/snapshots/70baa79a7bd8084cb9109e4ab96385f316aac3f1/" 
+def load_model(device, model_path=None):
+    # Use environment variable or default model name
+    if model_path is None:
+        model_path = os.environ.get('KIMI_AUDIO_MODEL_PATH', 'moonshotai/Kimi-Audio-7B-Instruct')
     model = KimiAudio(model_path=model_path, load_detokenizer=False, device = device)
     return model
 

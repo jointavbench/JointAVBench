@@ -1,182 +1,213 @@
+"""
+Interval Identification Module
+
+This script identifies video segment intervals that are relevant to generated Q&A pairs.
+It uses LLM (via OpenAI API) to analyze captions and determine which video segments
+contain the information needed to answer each question.
+"""
+
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4,5"
 import json
 from collections import defaultdict
 from tqdm import tqdm
-import pickle
-import copy
 import time
 import random
 from openai import OpenAI
-import multiprocessing
-from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
-from utils import load_caption, load_json, save_json, load_desc, load_sub, prepare_sub, join_subtitles, merge_captions_segment_wise, join_captions
+from utils import load_caption, load_json, save_json, load_sub, join_subtitles, merge_captions_segment_wise, join_captions
 from prompts import INTERVAL_CHECK_PROMPT, STAGE2TASK
-from parse_data import filter_qa_general, clean_subtitles, extract_segment_interval
+from parse_data import clean_subtitles, extract_segment_interval
 
-# MODEL_PATH = "Qwen/Qwen2.5-72B-Instruct"
-MODEL_PATH = "/data-01/jianghan/.cache/huggingface/hub/models--Qwen--Qwen2.5-72B-Instruct/snapshots/495f39366efef23836d0cfae4fbe635880d2be31"
-STAGE = 'multi'
-API_KEY = "sk-d4099bd527ba48ba9d0fa6e58b35bfff"
+# Configuration
+MODEL_PATH = os.environ.get('QWEN_MODEL_PATH', 'Qwen/Qwen2.5-72B-Instruct')
+STAGE = 'multi'  # Can be 'single', 'multi', or 'full'
+API_KEY = os.environ.get('QWEN_API_KEY', '')
 MODEL_NAME = "qwen2.5-72b-instruct"
-# Define the system prompt
+
 SYSTEM_PROMPT = """
 Your task is to identify the segment intervals based on the information used in the question-answer pair. Please follow the instructions to identify the interval.
 """
+
+# Initialize OpenAI client with Qwen API endpoint
 client = OpenAI(
-        # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
-        api_key=API_KEY, 
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    )
+    api_key=API_KEY,
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+
 def process_openai_api(messages, max_retries=5):
-    """处理单个API调用的函数"""
+    """
+    Process a single API call to identify segment intervals with retry mechanism.
+
+    This function makes API calls to the LLM to identify which video segments
+    are relevant for answering a question. It includes exponential backoff
+    retry logic to handle transient failures.
+
+    Args:
+        messages: Tuple of (message_list, metadata) where:
+            - message_list: List of chat messages for the API
+            - metadata: List containing video_name and other info
+        max_retries: Maximum number of retry attempts (default: 5)
+
+    Returns:
+        tuple: (metadata, generated_text) where:
+            - metadata: Original metadata passed in
+            - generated_text: LLM response with segment interval, or None if failed
+
+    Note:
+        Uses exponential backoff with random jitter for retries
+    """
     message, metadata = messages
     video_name = metadata[0]
-    time.sleep(random.randint(1,3))
+
+    # Add random delay to avoid rate limiting
+    time.sleep(random.randint(1, 3))
+
     retry_count = 0
     while retry_count < max_retries:
         try:
             completion = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=message,
-                temperature=0.1, 
-                top_p=0.001, 
-                presence_penalty=1.05, 
+                temperature=0.1,
+                top_p=0.001,
+                presence_penalty=1.05,
                 max_tokens=1024,
             )
             return metadata, completion.choices[0].message.content
-            
+
         except Exception as e:
             retry_count += 1
             if retry_count < max_retries:
-                # 指数退避等待时间 (2, 4, 8, 16秒) + 随机抖动
-                wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)  # 最大不超过30秒
-                print(f"视频 {video_name} 第 {retry_count} 次尝试失败，{str(e)}，等待 {wait_time:.1f} 秒后重试...")
+                # Exponential backoff: 2, 4, 8, 16 seconds + random jitter (max 30s)
+                wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                print(f"Video {video_name} attempt {retry_count} failed: {str(e)}, waiting {wait_time:.1f}s before retry...")
                 time.sleep(wait_time)
             else:
-                print(f"视频 {video_name} 达到最大重试次数 {max_retries} 仍失败，错误: {str(e)}")
+                print(f"Video {video_name} reached max retries ({max_retries}), error: {str(e)}")
                 return metadata, None
 
 if __name__ == '__main__':
-    caption_path = 'paired_captions.json' 
+    """
+    Main execution block for interval identification.
+
+    Workflow:
+    1. Load video captions and Q&A pairs
+    2. For each task type in the specified STAGE:
+       - Filter videos with required audio content
+       - Generate interval prompts from captions + Q&A
+       - Call LLM to identify relevant segment intervals
+       - Save identified intervals to JSON files
+
+    Output:
+        Creates {task}_intervals.json files containing segment boundaries
+        for each question-answer pair.
+    """
+    # Configuration paths
+    caption_path = 'paired_captions.json'
     sub_path = './raw_data/subtitle'
     save_path = './results'
+
+    # Load data
     paired_captions = load_caption(caption_path)
-    
     vid2sub = load_sub(sub_path)
     vid2covid = load_json('./vid2covid.json')
     vid_names = list(paired_captions.keys())
-    # task2qa = defaultdict(list)
-    # filtered_qas = filter_qa_general(save_path, STAGE, True)
-    # for qa in filtered_qas:
-    #     task2qa[qa['task']].append(qa)
+
+    # Load Q&A pairs organized by task type
     qa_path = './task2qa_general.json'
     task2qa = load_json(qa_path)
-    # tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-    # llm = LLM(
-    #     model=MODEL_PATH,
-    #     tensor_parallel_size=4,
-    #     gpu_memory_utilization=0.9,
-    #     dtype='bfloat16',
-    # )
-    # sampling_params = SamplingParams(
-    #     temperature=0.1, 
-    #     top_p=0.001, 
-    #     repetition_penalty=1.05, 
-    #     max_tokens=1024,
-    # )
 
+    # Process tasks for the specified stage (single/multi/full)
     scene_level = STAGE2TASK[STAGE]
     for task in scene_level:
+        # Filter tasks to process (can be configured)
         if task not in ['task9', 'task13']:
             continue
         qas = list()
-        aud_forms = scene_level[task]
+        aud_forms = scene_level[task]  # Required audio types for this task
         generated_qas = task2qa[task]
         vid2qa = defaultdict(list)
+
+        # Load existing results if available (resume capability)
         if os.path.exists(os.path.join(save_path, f'{task}_intervals.json')):
             generated_qas = load_json(os.path.join(save_path, f'{task}_intervals.json'))
             for item in generated_qas:
                 if item['segment_id'] is not None:
+                    # Already has interval identified, keep it
                     qas.append(item)
                     continue
+                # Need to identify interval for this item
                 video_name = item['video_name']
                 vid2qa[video_name].append(item)
         else:
+            # First run, process all Q&A pairs
             for item in generated_qas:
                 video_name = item['video_name']
-                # segment_id = {k:v for k,v in item if k != 'video_name'}
                 vid2qa[video_name].append(item)
         vid_names = list(vid2qa.keys())
         vid_names.sort()
-        for vid in tqdm(vid_names, desc = f'Processing [{task}]'):
+
+        for vid in tqdm(vid_names, desc=f'Processing [{task}]'):
+            # Get valid segments and captions for this video
             covid = vid2covid[vid]
             video_captions = paired_captions[vid]
             video_captions = [i for i in video_captions if i['segment_id'] in covid]
+
+            # Load and process subtitles and audio captions
             subtitles = clean_subtitles(vid2sub[vid])
             joined_sub = join_subtitles(subtitles)
             vid_caption, music_caption, sound_caption, speech_emotion = join_captions(video_captions)
-            if 'speech' in aud_forms:
-                if joined_sub == '':
-                    continue
-            if 'speech_emotion' in aud_forms:
-                if speech_emotion == '':
-                    continue
-            if 'sound_event' in aud_forms:
-                if sound_caption == '':
-                    continue
-            if 'music' in aud_forms:
-                if music_caption == '':
-                    continue
+
+            # Validate that video has required audio content for this task
+            if 'speech' in aud_forms and joined_sub == '':
+                continue
+            if 'speech_emotion' in aud_forms and speech_emotion == '':
+                continue
+            if 'sound_event' in aud_forms and sound_caption == '':
+                continue
+            if 'music' in aud_forms and music_caption == '':
+                continue
+            # Prepare segment information for prompting
             prompt_completion = dict()
-            segments_info= merge_captions_segment_wise(video_captions, subtitles, aud_forms)
+            segments_info = merge_captions_segment_wise(video_captions, subtitles, aud_forms)
             prompt_completion['segments_info'] = segments_info
+
+            # Process each Q&A pair for this video
             available_qas = vid2qa[vid]
             for available_qa in available_qas:
                 prompt_completion['question'] = available_qa['question']
                 prompt_completion['answer'] = available_qa['answer']
                 prompt_completion['explanation'] = available_qa['explanation']
-                
+
+                # Generate prompt and call LLM to identify intervals
                 task_prompt = INTERVAL_CHECK_PROMPT.format(**prompt_completion)
                 message = [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": task_prompt}
-                ]   
+                ]
                 _, generated_text = process_openai_api([message, [vid]])
-                # text = tokenizer.apply_chat_template(
-                #     message,
-                #     tokenize=False,
-                #     add_generation_prompt=True
-                # )
-                # tokens = tokenizer.encode(text)
-                # if len(tokens) >= 30000:
-                #     generated_text = ''
-                # else:
-                #     try:
-                #         response = llm.generate([text], sampling_params=sampling_params, use_tqdm = False)
-                #         generated_text = response[0].outputs[0].text
-                #     except RuntimeError as e:
-                #         tokens = tokenizer.encode(text)
-                #         print(len(tokens))
-                #         print(e)
-                
+
+                # Parse interval from LLM response
                 segment_info = extract_segment_interval(generated_text)
                 if segment_info is None:
                     intervals = None
                 else:
-                    intervals = [segment_info['start'],segment_info['end']]
-                caption ={
-                    'qid':available_qa['qid'],
-                    'video_name':vid,
-                    'task':task,
-                    'segment_id':intervals,
-                    'question':available_qa['question'],
-                    'answer':available_qa['answer'],
-                    'explanation':available_qa['explanation'],
+                    intervals = [segment_info['start'], segment_info['end']]
+
+                # Store result
+                caption = {
+                    'qid': available_qa['qid'],
+                    'video_name': vid,
+                    'task': task,
+                    'segment_id': intervals,
+                    'question': available_qa['question'],
+                    'answer': available_qa['answer'],
+                    'explanation': available_qa['explanation'],
                     'caption': generated_text,
                 }
                 qas.append(caption)
+
+        # Save results for this task
         save_json(qas, os.path.join(save_path, f'{task}_intervals.json'))
 
         

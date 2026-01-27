@@ -18,7 +18,8 @@ MODEL_PATH = "Qwen/Qwen2.5-72B-Instruct"
 BATCH_SIZE = 32
 # STAGE = 'multi'
 # JUDGE_STAGE = 'modality'
-API_KEY = "sk-d4099bd527ba48ba9d0fa6e58b35bfff"
+# Get API key from environment variable
+API_KEY = os.environ.get('QWEN_API_KEY', '')
 MODEL_NAME = "qwen2.5-72b-instruct"
 judge_system_prompt = {
     'modality':"""

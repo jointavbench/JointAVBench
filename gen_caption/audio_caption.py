@@ -175,8 +175,9 @@ def main(args):
     )
     task_name = args.task_name
 
-    directory_path = '/data-01/jianghan/caption_data/'
-    audio_directory = '/data-01/jianghan/sfd_audio/'
+    # Use arguments or environment variables for data paths
+    directory_path = args.data_dir if hasattr(args, 'data_dir') and args.data_dir else os.environ.get('CAPTION_DATA_DIR', './data/captions')
+    audio_directory = args.audio_dir if hasattr(args, 'audio_dir') and args.audio_dir else os.environ.get('AUDIO_DIR', './data/audio')
     video_names = sorted(os.listdir(directory_path))
     if args.merged:
         vid2coverage = load_json('./coverage.json')
@@ -239,5 +240,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task-name', choices=['audio_caption', 'speech_emotion', 'test'], help='', required=True)
     parser.add_argument('--merged', action = 'store_true', help='')
+    parser.add_argument('--data-dir', type=str, default='./data/captions', help='Directory containing caption data')
+    parser.add_argument('--audio-dir', type=str, default='./data/audio', help='Directory containing audio files')
     args = parser.parse_args()
     main(args)

@@ -22,7 +22,8 @@ BATCH_SIZE = 32
 SYSTEM_PROMPT = """
 Your task is to generate three plausible but incorrect distractors for video-based multiple-choice questions. Use visual and audio details from the video segment to create distractors that align with the content but are factually wrong. Follow the provided instructions to generate distractors.
 """
-API_KEY = "sk-d4099bd527ba48ba9d0fa6e58b35bfff"
+# Get API key from environment variable
+API_KEY = os.environ.get('QWEN_API_KEY', '')
 MODEL_NAME = "qwen2.5-72b-instruct"
 client = OpenAI(
         # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",

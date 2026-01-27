@@ -5,7 +5,8 @@ import random
 import time
 import subprocess
 
-API_KEY = "sk-9jcDFDEuznmNVxrgG6wEVyE3Qm9R6P5D21h5yh35rU94tt3u"
+# Get API key from environment variable
+API_KEY = os.environ.get('GEMINI_API_KEY', '')
 MODEL_NAME = "gemini-2.5-flash-preview-04-17-nothinking"
 
 def upload_file_to_tmpfiles(file_path):
@@ -82,9 +83,7 @@ def evaluation(
     prompt, file_path, segments, _ = input_data
     # video_info = upload_file_to_tmpfiles(file_path+'.mp4')
     file_name = os.path.basename(file_path+'.mp4')
-    hf_file_path = os.path.join(
-        f'https://huggingface.co/datasets/roverx12345/qa_vids/resolve/main/{file_name}?download=true'
-    )
+    hf_file_path = "YOUR_HF_FILE_PATH"
     # print(video_info['download_url'])
     # 构建请求内容
     content = [

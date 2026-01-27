@@ -1,7 +1,7 @@
 import os
+# Set retry limit for video decoding
 os.environ['DECORD_EOF_RETRY_MAX'] = '40960'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '4,5,6,7'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 import re
@@ -28,37 +28,38 @@ def extract_model_answer(
     answer_patterns: List[str] = None
 ) -> Optional[str]:
     """
-    从模型输出中提取答案，支持多种匹配方式：
-    1. 使用正则表达式匹配常见答案模式
-    2. 直接查找选项前缀
-    3. 查找输出中是否包含选项对应的文本内容
-    
-    参数:
-        model_output: 模型的原始输出文本
-        prefix2text: 选项前缀到选项内容的映射字典，如 {'A': 'Paris', 'B': 'London'}
-        possible_prefixes: 可能的选项前缀列表，默认为['A', 'B', 'C', 'D']
-        answer_patterns: 用于匹配答案的正则表达式模式列表
-        
-    返回:
-        匹配到的单个选项前缀(如'A')，如果匹配到多个选项或没有匹配到则返回None
+    Extract the answer choice from model output using multiple matching strategies:
+    1. Regex pattern matching for common answer formats
+    2. Direct prefix searching (e.g., "A.", "B.")
+    3. Option text content matching
+    4. Lenient matching for very short outputs
+
+    Args:
+        model_output: Raw text output from the model
+        prefix2text: Mapping from option prefixes to their text content, e.g., {'A': 'Paris', 'B': 'London'}
+        possible_prefixes: List of valid option prefixes, defaults to ['A', 'B', 'C', 'D']
+        answer_patterns: List of regex patterns for answer extraction
+
+    Returns:
+        Single matched option prefix (e.g., 'A'), or None if multiple/no matches found
     """
-    # 设置默认参数
+    # Set default parameters
     if possible_prefixes is None:
         possible_prefixes = ['A', 'B', 'C', 'D']
     
     if answer_patterns is None:
         answer_patterns = [
-            r'answer(?: is)?\s*[:=-]?\s*(["\'(]?\s*[A-D]\s*["\')]?)',  # 匹配 "Answer: A", "answer is 'B'", "answer is (C)", "answer is "D""
-            r'([A-D])(?:\s*is the|\)?\s*is)\s*(?:correct|right|answer)',  # "A is correct" 或 "B) is right" 或 "C is the answer"
-            r'option\s*([A-D])\b',  # "option A" 或 "choose option C"
-            r'select(?:ed)?\s*([A-D])\b',  # "select B" 或 "selected D"
-            r'["\'(]\s*([A-D])\s*["\')]\s*(?:is|as)\s*(?:the )?(?:answer|correct)',  # 匹配 "'A' is the answer", "(B) is correct", '"C" as answer'
+            r'answer(?: is)?\s*[:=-]?\s*(["\'(]?\s*[A-D]\s*["\')]?)',  # "Answer: A", "answer is 'B'", "answer is (C)"
+            r'([A-D])(?:\s*is the|\)?\s*is)\s*(?:correct|right|answer)',  # "A is correct", "B) is right", "C is the answer"
+            r'option\s*([A-D])\b',  # "option A", "choose option C"
+            r'select(?:ed)?\s*([A-D])\b',  # "select B", "selected D"
+            r'["\'(]\s*([A-D])\s*["\')]\s*(?:is|as)\s*(?:the )?(?:answer|correct)',  # "'A' is the answer", "(B) is correct"
         ]
-    
-    # 预处理：移除换行和多余空格
+
+    # Preprocessing: remove newlines and extra whitespace
     cleaned_text = ' '.join(model_output.split())
-    
-    # 1. 尝试所有正则匹配模式
+
+    # Strategy 1: Try all regex matching patterns
     found_prefixes = set()
     for pattern in answer_patterns:
         matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
@@ -66,31 +67,29 @@ def extract_model_answer(
             extracted = match.group(1).upper()
             if extracted in possible_prefixes:
                 found_prefixes.add(extracted)
-    
-    # 2. 尝试直接查找选项前缀
+
+    # Strategy 2: Direct prefix search (e.g., "A.")
     for prefix in possible_prefixes:
         if re.search(rf'\b{prefix}\b(?=\.\s)', cleaned_text):
             found_prefixes.add(prefix.upper())
-    
-    # 4. 如果前几种方法都失败，检查是否包含选项文本内容
+
+    # Strategy 3: Check if option text content is in output
     for prefix, text in prefix2text.items():
-        # 确保prefix在可能的选项中
         if prefix.upper() in possible_prefixes:
-            # 检查选项文本是否在模型输出中
             if text in cleaned_text or text.lower() in cleaned_text:
                 found_prefixes.add(prefix.upper())
-    
-    # 5. 对于非常短的输出，尝试更宽松的匹配
+
+    # Strategy 4: Lenient matching for very short outputs (single word)
     if len(cleaned_text.split()) == 1:
         for prefix in possible_prefixes:
             if prefix in cleaned_text.strip().upper():
                 found_prefixes.add(prefix)
-        
-    # 3. 检查是否包含多个选项
+
+    # Return None if multiple matches found (ambiguous)
     if len(found_prefixes) > 1:
         return None
-    
-    # 如果已经找到一个明确的选项，直接返回
+
+    # Return the single matched prefix
     if len(found_prefixes) == 1:
         return found_prefixes.pop()
     return None
@@ -100,88 +99,107 @@ def generate_mcq_prompt(
     options: List[str],
     correct_answer: str,
     option_prefixes: List[str] = None
-) -> Tuple[str, str]:
+) -> Tuple[str, str, Dict[str, str]]:
     """
-    生成多选题的prompt文本并记录正确答案标记
-    
-    参数:
-        question: 问题文本
-        options: 选项文本列表
-        correct_answer: 正确答案文本
-        option_prefixes: 可选的选项前缀列表(如['A', 'B', 'C'])
-        
-    返回:
-        tuple: (生成的prompt文本, 正确答案前缀如"A")
+    Generate a multiple-choice question prompt with shuffled options.
+
+    This function creates a formatted MCQ prompt by:
+    1. Shuffling the options to prevent position bias
+    2. Assigning prefixes (A, B, C, D) to shuffled options
+    3. Tracking which prefix corresponds to the correct answer
+
+    Args:
+        question: The question text
+        options: List of option texts
+        correct_answer: The correct answer text (must be in options list)
+        option_prefixes: Custom option prefixes, defaults to ['A', 'B', 'C', 'D']
+
+    Returns:
+        tuple: (formatted_prompt, correct_prefix, prefix_to_text_mapping)
+            - formatted_prompt: Question with labeled options
+            - correct_prefix: The prefix (e.g., 'A') of the correct answer
+            - prefix_to_text_mapping: Dict mapping each prefix to its option text
+
+    Raises:
+        ValueError: If fewer than 2 options, too many options, or correct_answer not in options
     """
     prefix2text = {}
-    # 设置默认选项前缀(A., B., C., D.)
+
+    # Set default option prefixes (A, B, C, D)
     if option_prefixes is None:
         option_prefixes = ['A', 'B', 'C', 'D']
-    
-    # 验证输入
+
+    # Validate inputs
     if len(options) < 2:
-        raise ValueError("必须提供至少2个选项")
+        raise ValueError("Must provide at least 2 options")
     if len(options) > len(option_prefixes):
-        raise ValueError(f"选项数量({len(options)})超过前缀数量({len(option_prefixes)})")
+        raise ValueError(f"Number of options ({len(options)}) exceeds number of prefixes ({len(option_prefixes)})")
     if correct_answer not in options:
-        raise ValueError("正确答案不在提供的选项中")
-    
-    # 打乱选项顺序(但记录原始索引)
+        raise ValueError("Correct answer not in provided options")
+
+    # Shuffle options (but track original indices)
     indexed_options = list(enumerate(options))
     random.shuffle(indexed_options)
-    
-    # 构建带前缀的选项文本和正确答案跟踪
+
+    # Build prefixed option text and track correct answer
     prefixed_options = []
     correct_prefix = None
-    
+
     for idx, (original_idx, option) in enumerate(indexed_options):
         prefix = option_prefixes[idx]
         prefixed_option = f"{prefix}. {option}"
         prefixed_options.append(prefixed_option)
         prefix2text[prefix] = option
-        # 检查是否是正确答案
+
+        # Check if this is the correct answer
         if options[original_idx] == correct_answer:
             correct_prefix = prefix
-    
-    # 拼接问题和选项
+
+    # Combine question and options
     options_text = "\n".join(prefixed_options)
     prompt = f"{question}\n{options_text}"
-    
+
     return prompt, correct_prefix, prefix2text
 
 def get_segment_time(segment_id, segments_list):
+    """
+    Calculate start and end times for video segments.
+
+    Args:
+        segment_id: Can be:
+            - int: Single segment index
+            - list: Multiple segment indices (uses min/max range)
+            - None: Entire video (all segments)
+        segments_list: List of video segments, where each segment is [start_time, end_time]
+
+    Returns:
+        List[float]: [start_time, end_time] for the requested segment(s)
+    """
     if isinstance(segment_id, int):
         start_segment, end_segment = segment_id, segment_id
     elif isinstance(segment_id, list):
         start_segment, end_segment = min(segment_id), max(segment_id)
-    else:  # None
+    else:  # None - use entire video
         start_segment, end_segment = 0, -1
     start_time = segments_list[start_segment][0]
     end_time = segments_list[end_segment][-1]
     return [start_time, end_time]
 
-def batch_inputs(inputs, metadata, max_duration=300):
-    current_batch = []  
-    current_metadata = []
-    current_duration = 0 
-    for input_data, meta in zip(inputs,metadata):
-        start_time, end_time= input_data[2]
-        duration = end_time-start_time
-        if current_duration + duration <= max_duration:
-            current_batch.append(input_data)
-            current_metadata.append(meta)
-            current_duration += duration
-        else:
-            if current_batch:
-                yield current_batch, current_metadata
-            current_batch = [input_data] 
-            current_metadata = [meta] 
-            current_duration = duration
-
-    if current_batch:
-        yield current_batch, current_metadata
-        
 def batch_inputs_num(inputs, metadata, max_num=5):
+    """
+    Batch inputs and metadata into fixed-size chunks for processing.
+
+    This generator yields batches of up to max_num items, maintaining
+    alignment between inputs and metadata.
+
+    Args:
+        inputs: List of input data items
+        metadata: List of metadata items (must align with inputs)
+        max_num: Maximum number of items per batch (default: 5)
+
+    Yields:
+        tuple: (batch_inputs, batch_metadata) for each batch
+    """
     current_batch = []  
     current_metadata = []
     for input_data, meta in zip(inputs,metadata):
@@ -197,6 +215,26 @@ def batch_inputs_num(inputs, metadata, max_num=5):
         yield current_batch, current_metadata
 
 def eval_batch(inputs, metadata, evaluation, modality, model_name, save_path):
+    """
+    Evaluate model on batched inputs and save results incrementally.
+
+    This function:
+    1. Batches inputs using batch_inputs_num()
+    2. Calls the evaluation function for each batch
+    3. Extracts answers from model outputs
+    4. Saves results line-by-line to JSONL file
+
+    Args:
+        inputs: List of (prompt, file_path, time_range, prefix2text) tuples
+        metadata: List of metadata dictionaries for each input
+        evaluation: Evaluation function that processes batches
+        modality: Evaluation modality ('a', 'v', 'av', 'vt')
+        model_name: Name of the model being evaluated
+        save_path: Path to save results (JSONL format)
+
+    Returns:
+        List of result dictionaries containing model answers and metadata
+    """
     results = list()
     pbar = tqdm(total = len(inputs))
     for input_batch, input_meta in batch_inputs_num(inputs, metadata):
@@ -226,19 +264,52 @@ def shuffle_data(inputs, metadata):
     return list(shuffled_inputs), list(shuffled_metadata)
 
 def chunk_data(inputs, metadata, num_chunks):
-    """Split inputs & metadata into N chunks for parallel processing."""
+    """
+    Split inputs and metadata into N approximately equal chunks.
+
+    Uses ceiling division to ensure all items are included. The last chunk
+    may be smaller if items don't divide evenly.
+
+    Args:
+        inputs: List of input items to split
+        metadata: List of metadata items (must align with inputs)
+        num_chunks: Number of chunks to create
+
+    Yields:
+        tuple: (chunk_inputs, chunk_metadata) for each chunk
+    """
     chunk_size = (len(inputs) + num_chunks - 1) // num_chunks  # Round up division
     for i in range(num_chunks):
         start = i * chunk_size
         end = start + chunk_size
         yield inputs[start:end], metadata[start:end]
-        
+
 def process_chunk(task, eval_func, modality, model_name, save_path):
-    """Process a chunk of data on the assigned GPU."""
+    """
+    Process a data chunk on an assigned GPU device (multiprocessing worker).
+
+    This function:
+    1. Loads the model on the specified GPU device
+    2. Processes each item in the chunk sequentially
+    3. Extracts answers from model outputs
+    4. Thread-safely writes results to file using fcntl locks
+
+    Args:
+        task: Tuple of (chunk_inputs, chunk_metadata, device)
+        eval_func: Model-specific evaluation function
+        modality: Evaluation modality ('a', 'v', 'av', 'vt')
+        model_name: Name of the model to load
+        save_path: Output file path for results
+
+    Returns:
+        List of result dictionaries for this chunk
+
+    Note:
+        Uses fcntl.flock for thread-safe file writing across processes
+    """
     chunk_inputs, chunk_metadata, device = task
-    # Load model on the assigned GPU
-    import time
-    import random
+
+    # Add random delay to stagger GPU initialization
     time.sleep(random.randint(1, 10))
     model_conf = load_model_for_device(model_name, device)
     results = []
@@ -265,8 +336,32 @@ def process_chunk(task, eval_func, modality, model_name, save_path):
     return results
 
 def eval_multiprocess(inputs, metadata, eval_func, modality, model_name, save_path):
+    """
+    Evaluate model using multiprocessing across available GPUs.
+
+    Workflow:
+    1. Detects available GPUs (or falls back to CPU)
+    2. Shuffles data while maintaining input-metadata alignment
+    3. Splits data into chunks (one per GPU)
+    4. Assigns each chunk to a GPU device
+    5. Processes chunks in parallel using multiprocessing.Pool
+
+    Args:
+        inputs: List of input data items
+        metadata: List of metadata items (aligned with inputs)
+        eval_func: Model-specific evaluation function
+        modality: Evaluation modality ('a', 'v', 'av', 'vt')
+        model_name: Name of the model being evaluated
+        save_path: Output file path for results
+
+    Returns:
+        List of lists of result dictionaries (one list per chunk)
+
+    Note:
+        Uses 'spawn' start method for compatibility with CUDA
+    """
     torch.multiprocessing.set_start_method('spawn', force=True)
-    
+
     num_gpus = torch.cuda.device_count()
     devices = [f'cuda:{i}' for i in range(num_gpus)] if num_gpus > 0 else ['cpu']
 
@@ -290,35 +385,62 @@ def eval_multiprocess(inputs, metadata, eval_func, modality, model_name, save_pa
     return results
 
 def load_model_for_device(model_name, device):
-    if model_name == 'videollama2':
-        from eval_videollama2 import load_model
-        return load_model(device)
-    elif model_name == 'omnir1':
-        from eval_omnir1 import load_model
-        return load_model(device)
-    elif model_name == 'videollama3':
-        from eval_videollama3 import load_model
-        return load_model(device)
-    elif model_name == 'vita1.5':
-        from eval_vita import load_model
-        return load_model(device)
-    elif model_name == 'llavavideo':
-        from eval_llavavideo import load_model
-        return load_model(device)
-    elif model_name == 'internvl':
-        from eval_internvl import load_model
-        return load_model(device)
-    elif model_name == 'kimiaudio':
-        from eval_kimi import load_model
-        return load_model(device)
-    elif model_name == 'avicuna':
-        from eval_avicuna import load_model
-        return load_model(device)
-    else:
+    """
+    Dynamically load a model on the specified device.
+
+    This function imports and loads the appropriate model based on model_name.
+    Each model has its own eval_<model>.py module with a load_model function.
+
+    Args:
+        model_name: Name of the model to load (e.g., 'videollama2', 'omnir1')
+        device: Device string (e.g., 'cuda:0', 'cpu')
+
+    Returns:
+        Model configuration object specific to the loaded model
+
+    Raises:
+        ValueError: If model_name is not recognized
+
+    Supported models:
+        videollama2, omnir1, videollama3, vita1.5, llavavideo,
+        internvl, kimiaudio, avicuna
+    """
+    # Model name to module name mapping
+    MODEL_LOADERS = {
+        'videollama2': 'eval_videollama2',
+        'omnir1': 'eval_omnir1',
+        'videollama3': 'eval_videollama3',
+        'vita1.5': 'eval_vita',
+        'llavavideo': 'eval_llavavideo',
+        'internvl': 'eval_internvl',
+        'kimiaudio': 'eval_kimi',
+        'avicuna': 'eval_avicuna',
+    }
+
+    if model_name not in MODEL_LOADERS:
         raise ValueError(f"Invalid model name: {model_name}")
 
+    module_name = MODEL_LOADERS[model_name]
+    module = __import__(module_name, fromlist=['load_model'])
+    return module.load_model(device)
+
 def process_chunk_api(task, eval_func, modality, model_name, save_path):
-    """Process a chunk of data on the assigned GPU."""
+    """
+    Process a chunk of data using API-based evaluation with rate limiting.
+
+    Similar to process_chunk but designed for API-based models which don't
+    require GPU assignment. Includes random delays to avoid rate limiting.
+
+    Args:
+        task: Tuple of (chunk_inputs, chunk_metadata, _unused)
+        eval_func: API evaluation function
+        modality: Evaluation modality
+        model_name: Name of the API model
+        save_path: Output file path
+
+    Returns:
+        List of result dictionaries for this chunk
+    """
     input_data, meta_data = task
     # Load model on the assigned GPU
     results = []
@@ -344,53 +466,126 @@ def process_chunk_api(task, eval_func, modality, model_name, save_path):
     return model_result
 
 def eval_api(inputs, metadata, eval_func, modality, model_name, save_path):
+    """
+    Evaluate using API-based models with parallel requests.
+
+    This function:
+    1. Filters inputs based on available question IDs
+    2. Processes requests in parallel using multiprocessing
+    3. Includes random delays to avoid rate limiting
+
+    Args:
+        inputs: List of input data items
+        metadata: List of metadata items
+        eval_func: API evaluation function
+        modality: Evaluation modality
+        model_name: Name of the API model
+        save_path: Output file path
+
+    Returns:
+        List of result dictionaries (may include None for failed requests)
+
+    Note:
+        Parallel level is hardcoded to 3 processes
+    """
     avail_qids = load_json('./avail_qids.json')
     parallel_num = 3
     eval_data = list(zip(inputs, metadata))
     eval_data = [(input_item, metadata_item) for input_item, metadata_item in eval_data if metadata_item['qid'] in avail_qids]
-    tasks = []
+
     with multiprocessing.Pool(processes=parallel_num) as pool:
-        # 使用partial固定client参数
+        # Use partial to fix common parameters
         func = partial(process_chunk_api, eval_func=eval_func, modality=modality, model_name=model_name, save_path=save_path)
         results = list(tqdm(
             pool.imap(func, eval_data),
             total=len(eval_data),
             desc=f'Processing API calls'
         ))
-    
+
     return results
 
 def prepare_prompt(prompt, task, segment_id, video_captions, subtitles):
+    """
+    Prepare prompt for text-based (VT) modality evaluation.
+
+    Combines video captions and subtitles with the question to create
+    a text-only prompt that contains audio-visual content information.
+
+    Args:
+        prompt: Original question prompt
+        task: Task type (used to determine audio format)
+        segment_id: Video segment identifier
+        video_captions: List of video caption segments
+        subtitles: List of subtitle segments
+
+    Returns:
+        str: Enhanced prompt with caption and subtitle context
+    """
     new_prompt = "Please answer the question based on the video and the text of audio content below.\n"
     aud_forms = task2audform[task]
     caption_text = merge_captions_segment_wise(video_captions, subtitles, aud_forms, segment_id=segment_id)
-    new_prompt += caption_text +"\nHere's the question:\n"+ prompt
+    new_prompt += caption_text + "\nHere's the question:\n" + prompt
     return new_prompt
     
-def evaluation_model(json_path, video_dir, modality, model_name, save_path, vid2timecode, caption_path='paired_captions.json', sub_path = 'subtitle'):
+def evaluation_model(json_path, video_dir, modality, model_name, save_path, vid2timecode, caption_path='paired_captions.json', sub_path='subtitle'):
+    """
+    Main evaluation pipeline for processing questions and running model inference.
 
-    # 加载JSON文件
+    This function:
+    1. Loads questions from JSON and filters out already-processed items
+    2. Prepares inputs (prompts, file paths, time segments) for each question
+    3. Routes to appropriate evaluation function based on model_name
+    4. Handles model-specific data formatting and result processing
+
+    Args:
+        json_path: Path to questions JSON file
+        video_dir: Directory containing video files
+        modality: Evaluation modality - 'a' (audio), 'v' (video), 'av' (audio-video), 'vt' (video-text)
+        model_name: Name of model to evaluate (determines routing)
+        save_path: Output file path for results (JSONL format)
+        vid2timecode: Mapping from video names to segment timecodes
+        caption_path: Path to video captions JSON (for VT modality)
+        sub_path: Path to subtitle files directory (for VT modality)
+
+    Returns:
+        List of result dictionaries containing model answers and metadata
+
+    Model routing:
+        - Batch processing: qwen2.5omni, qwen2.5vl, qwen2audio
+        - Multiprocessing: videollama2, omnir1, videollama3, vita1.5, llavavideo,
+                          internvl, kimiaudio, avicuna
+        - API: gemini
+        - Special handling: onellm, gpt4o, salmonn, salmonno1, gemini_api, aurelia
+
+    Note:
+        - Skips items with missing video_name
+        - Maintains alignment between inputs and metadata
+        - Some models require pre-generated results (onellm, gpt4o, aurelia)
+    """
+    # Load questions from JSON file
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     paired_captions = load_caption(caption_path)
     vid2sub = load_sub(sub_path)
+
+    # Load existing results to avoid reprocessing
     existing_results = []
     if os.path.exists(save_path):
         existing_results = load_jsonl(save_path)
     existing_qids = set(result['qid'] for result in existing_results)
     new_data = [result for result in data if result['qid'] not in existing_qids]
 
-    # 处理每个条目
+    # Process each question and prepare inputs
     inputs = list()
     metadata = list()
     for idx, item in enumerate(new_data):
         video_name = item.get('video_name')
         if not video_name:
-            print(f"警告: 第 {idx} 条记录缺少 video_name，已跳过")
+            print(f"Warning: Record {idx} missing video_name, skipping")
             continue
         qid = item.get('qid')
         task = item.get('task')
-        segment_id = item.get('segment_id')  # 可能是索引(int)、索引列表(list)或None
+        segment_id = item.get('segment_id')  # Can be int (single segment), list (multiple), or None (full video)
         question = item.get('question')
         options = item.get('options')
         correct_answer = item.get('correct_answer')
@@ -628,50 +823,6 @@ def evaluation_model(json_path, video_dir, modality, model_name, save_path, vid2
                     })
                 save_json(salmonn_inputs, f'./salmonno1_data/salmonno1_{modality}_{i}.json')
             save_json(qid2metadata, f'./salmonno1_data/salmonno1_{modality}_qid2metadata.json')            
-    elif model_name == 'gemini_api':
-        processed_data = list()
-        results = list()
-        if os.path.exists(f'./gemini_{modality}_result.json'):
-            processed_data = load_json(f'./gemini_{modality}_result.json')
-        if len(processed_data) >0:
-            if os.path.exists(f'./gemini_{modality}_qid2metadata.json'):
-                qid2metadata = load_json(f'./gemini_{modality}_qid2metadata.json')
-            for item in tqdm(processed_data):
-                qid = item['qid']
-                meta_data = qid2metadata[qid]
-                text = item['model_output']
-                model_answer = extract_model_answer(text, meta_data.pop('prefix2text'))
-                model_result = {
-                    **meta_data,
-                    'modality': modality,
-                    'model': model_name,
-                    'model_answer': model_answer,
-                    'model_output': text,
-                }
-                # Thread-safe file writing (optional: use file lock if needed)
-                with open(save_path, 'a', encoding='utf-8') as f:
-                    json.dump(model_result, f, ensure_ascii=False)
-                    f.write('\n')
-                results.append(model_result)
-        else:
-            assert 1==0
-            qid2metadata = dict()
-            gemini_inputs = list()
-            upload_files = list()
-            for input_item, metadata_item in zip(inputs, metadata):
-                prompt, file_path, item_segment, prefix2text = input_item
-                video_path = os.path.basename(file_path+'.mp4')
-                metadata_item['prefix2text'] = prefix2text
-                qid2metadata[metadata_item['qid']] = metadata_item
-                gemini_inputs.append({
-                    'qid':metadata_item['qid'],
-                    "prompt": prompt,
-                    "video_path":video_path,
-                })
-                upload_files.append(video_path)
-            save_json(gemini_inputs, f'./gemini_{modality}.json')
-            save_json(qid2metadata, f'./gemini_{modality}_qid2metadata.json')
-            save_json(upload_files, f'./gemini_upload_files.json')
     elif model_name == 'aurelia':
         model_results = load_json('./aurelia_result_av.json')
         results = list()
@@ -699,8 +850,8 @@ def evaluation_model(json_path, video_dir, modality, model_name, save_path, vid2
 
 def main(args):
     qa_path = args.qa_path
-    # video_dir = '/data-01/jianghan/benchmark'
-    video_dir = '/data-01/jianghan/qa_vid'
+    # Use video_dir from args or environment variable
+    video_dir = args.video_dir if hasattr(args, 'video_dir') and args.video_dir else os.environ.get('VIDEO_DIR', './data/videos')
     modality = args.modality
     model_name = args.model_name
     save_path = f'./results/eval_results_{model_name}_{modality}.jsonl'
@@ -719,11 +870,12 @@ def main(args):
     
 if __name__ == "__main__":
     model_list = ["qwen2.5omni", "videollama2", "videollama3", "vita1.5","salmonn", "qwen2.5vl", "llavavideo", 
-                  "internvl", "kimiaudio", "onellm", "qwen2audio", "gpt4o", "gemini", "gemini_api", "omnir1", 
+                  "internvl", "kimiaudio", "onellm", "qwen2audio", "gpt4o", "gemini", "omnir1", 
                   "salmonno1", "avicuna", "aurelia"]
     parser = argparse.ArgumentParser()
     parser.add_argument('--modality', choices=["a", "v", "av", "vt"], help='', required=False, default = 'av')
     parser.add_argument('--qa-path', help='', required=True)
+    parser.add_argument('--video-dir', help='Directory containing video files', required=False, default='./data/videos')
     parser.add_argument('--model-name', choices=model_list, help='', required=True)
     args = parser.parse_args()
     main(args)

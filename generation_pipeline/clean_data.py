@@ -14,7 +14,8 @@ BATCH_SIZE = 24
 task = 'audio_caption_cleaning'
 # Define the system prompt
 SYSTEM_PROMPT = "You are a helpful assistant that performs data cleaning on audio captions, speech emotions, and subtitles. Your task is to follow my instructions."
-API_KEY = "sk-d4099bd527ba48ba9d0fa6e58b35bfff"
+# Get API key from environment variable
+API_KEY = os.environ.get('QWEN_API_KEY', '')
 MODEL_NAME = "qwen2.5-72b-instruct"
 
 if __name__ == '__main__':

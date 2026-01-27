@@ -117,9 +117,11 @@ def _get_rawvideo_dec(
     else:
         print("video path: {} error.".format(video_path))
 
-def load_model(device="cuda"):
+def load_model(device="cuda", model_path=None):
     model_base = None
-    model_path = '/data-01/jianghan/.cache/huggingface/hub/models--VITA-MLLM--VITA-1.5/snapshots/e42b47fa9f390f8bee2c852bf3d4af0281c532bc/'
+    # Use environment variable or default model name
+    if model_path is None:
+        model_path = os.environ.get('VITA_MODEL_PATH', 'VITA-MLLM/VITA-1.5')
     disable_torch_init()
     model_name = get_model_name_from_path(model_path)
     tokenizer, model, image_processor, context_len = load_pretrained_model(

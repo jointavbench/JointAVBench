@@ -12,98 +12,136 @@ from openpyxl import load_workbook
 
 def xlsx_to_json(file_path, sheet_name=None, header_row=1, output_file=None):
     """
-    将 Excel 文件 (.xlsx) 转换为 JSON 格式
-    
-    参数:
-        file_path (str): Excel 文件路径
-        sheet_name (str): 工作表名称，如果为 None 则使用第一个工作表
-        header_row (int): 表头所在的行号（从1开始）
-        output_file (str): 输出 JSON 文件路径，如果为 None 则不保存到文件
-        
-    返回:
-        list: 包含所有数据的 JSON 格式列表
+    Convert Excel file (.xlsx) to JSON format.
+
+    Args:
+        file_path (str): Path to Excel file
+        sheet_name (str): Worksheet name, if None uses the first worksheet
+        header_row (int): Row number containing headers (starts from 1)
+        output_file (str): Output JSON file path, if None doesn't save to file
+
+    Returns:
+        list: List of dictionaries containing all data in JSON format
     """
-    # 加载工作簿
+    # Load workbook
     wb = load_workbook(filename=file_path, read_only=True)
-    
-    # 获取工作表
+
+    # Get worksheet
     if sheet_name is None:
         sheet = wb.active
     else:
         sheet = wb[sheet_name]
-    
-    # 获取表头
+
+    # Extract headers
     headers = []
     for cell in sheet[header_row]:
         headers.append(cell.value)
-    
-    # 收集数据
+
+    # Collect data rows
     data = []
     for row in sheet.iter_rows(min_row=header_row + 1):
         row_data = {}
         for idx, cell in enumerate(row):
-            # 确保不超出表头范围
+            # Ensure we don't exceed header range
             if idx < len(headers):
                 row_data[headers[idx]] = cell.value
         data.append(row_data)
-    
-    # 关闭工作簿
+
+    # Close workbook
     wb.close()
-    
-    # 如果需要保存到文件
+
+    # Save to file if requested
     if output_file:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-    
+
     return data
 
 def load_json(file_path):
-    """加载JSON文件"""
+    """Load JSON file and return parsed data."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def load_jsonl(file_path):
+    """
+    Load JSONL (JSON Lines) file where each line is a separate JSON object.
+
+    Args:
+        file_path (str): Path to JSONL file
+
+    Returns:
+        list: List of parsed JSON objects
+    """
     data_list = []
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
-            # 解析每一行的 JSON 对象
+            # Parse each line as a JSON object
             json_obj = json.loads(line.strip())
             data_list.append(json_obj)
     return data_list
 
 def save_json(data, file_path):
-    """保存JSON文件"""
+    """Save data to JSON file with pretty printing."""
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 def jsonl2xlsx(file_path, save_path):
+    """Convert JSONL file to Excel format."""
     data = load_jsonl(file_path)
     df = pd.DataFrame(data)
     df.to_excel(save_path, index=False)
 
 def json2xlsx(file_path, save_path):
+    """Convert JSON file to Excel format."""
     data = load_json(file_path)
     df = pd.DataFrame(data)
     df.to_excel(save_path, index=False)
 
 def save_xlsx(data, save_path):
+    """Save data to Excel file."""
     df = pd.DataFrame(data)
     df.to_excel(save_path, index=False)
 
 def load_caption(file_path):
+    """
+    Load captions and organize by video name.
+
+    Args:
+        file_path (str): Path to caption JSON file
+
+    Returns:
+        dict: Dictionary mapping video_name to list of caption segments
+    """
     data = load_json(file_path)
     transformed_data = defaultdict(list)
     for item in data:
         video_name = item['video_name']
-        # segment_id = {k:v for k,v in item if k != 'video_name'}
         transformed_data[video_name].append(item)
     return transformed_data
 
 def load_desc(file_path):
+    """
+    Load video descriptions and organize by video name.
+
+    Args:
+        file_path (str): Path to descriptions JSON file
+
+    Returns:
+        dict: Dictionary mapping video_name to description text
+    """
     descs = load_json(file_path)
-    return dict({desc['video_name']:desc['description'] for desc in descs})
+    return dict({desc['video_name']: desc['description'] for desc in descs})
 
 def load_sub(sub_dir):
+    """
+    Load subtitle files from directory.
+
+    Args:
+        sub_dir (str): Directory containing subtitle JSON files
+
+    Returns:
+        dict: Dictionary mapping video_name to list of subtitle segments
+    """
     files = os.listdir(sub_dir)
     vid2sub = dict()
     for file in files:
@@ -114,46 +152,83 @@ def load_sub(sub_dir):
     return vid2sub
 
 def seconds2timestamp(seconds):
+    """
+    Convert seconds to timestamp format HH:MM:SS.mmm.
+
+    Args:
+        seconds (float): Time in seconds
+
+    Returns:
+        str: Formatted timestamp string
+    """
     t = timedelta(seconds=seconds)
-    
+
     total_seconds = int(t.total_seconds())
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
+    secs = total_seconds % 60
     milliseconds = t.microseconds // 1000
-    
-    time_format = f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+
+    time_format = f"{hours:02}:{minutes:02}:{secs:02}.{milliseconds:03}"
     return time_format
-    
+
 def timestamp2seconds(timestamp):
+    """
+    Convert timestamp string to seconds.
+
+    Args:
+        timestamp (str): Timestamp in format "HH:MM:SS.ffffff"
+
+    Returns:
+        float: Time in seconds
+    """
     time_obj = datetime.strptime(timestamp, "%H:%M:%S.%f")
-    # total_seconds = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
-    # return total_seconds
-    delta = timedelta(hours=time_obj.hour, minutes=time_obj.minute, seconds=time_obj.second, microseconds=time_obj.microsecond)
+    delta = timedelta(hours=time_obj.hour, minutes=time_obj.minute,
+                     seconds=time_obj.second, microseconds=time_obj.microsecond)
     return delta.total_seconds()
 
 def transform_options(item):
+    """
+    Add letter prefixes (A., B., C., D.) to multiple choice options.
+
+    Args:
+        item (dict): Dictionary containing 'options' and 'correct_answer' keys
+
+    Returns:
+        dict: Copy of item with prefixed options and correct_prefix field added
+    """
     if not isinstance(item, dict) or 'options' not in item or 'correct_answer' not in item:
         return item
-    
-    # 生成选项前缀 (A., B., C., D., ...)
+
+    # Generate option prefixes (A., B., C., D., ...)
     prefixes = [f"{chr(65 + i)}." for i in range(len(item['options']))]
-    
-    # 创建带前缀的选项列表
-    prefixed_options = [f"{prefix} {option}" 
+
+    # Create prefixed option list
+    prefixed_options = [f"{prefix} {option}"
                        for prefix, option in zip(prefixes, item['options'])]
-    
+
     correct_index = item['options'].index(item['correct_answer'])
     correct_prefix = prefixes[correct_index]
-    
-    # 更新字典
+
+    # Update dictionary
     transformed_item = item.copy()
     transformed_item['options'] = prefixed_options
     transformed_item['correct_prefix'] = correct_prefix
-    
+
     return transformed_item
 
 def remove_tone(text):
+    """
+    Remove phrases like 'with a happy tone', 'with an angry tone' from text.
+
+    Uses regex pattern to match and remove tone descriptions.
+
+    Args:
+        text (str): Input text
+
+    Returns:
+        str: Text with tone phrases removed
+    """
     pattern = r'\bwith an?\s+(\S+\s+){1,3}tone\b'
     result = re.sub(pattern, '', text)
     result = ' '.join(result.split())
