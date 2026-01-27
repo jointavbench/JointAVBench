@@ -210,17 +210,6 @@ If you find JointAVBench useful for your research, please cite our paper:
 }
 ```
 
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-We thank the following projects and resources:
-
-- [Qwen](https://github.com/QwenLM/Qwen) for audio and vision models
-- The research community for open-source multimodal models
-
 ## 📮 Contact
 
 For questions and feedback:
@@ -230,10 +219,3 @@ For questions and feedback:
 - **Project Page**: [https://jointavbench.github.io](https://jointavbench.github.io)
 - **Email**: chaojh@ruc.edu.cn
 
----
-
-<div align="center">
-
-**For detailed evaluation instructions and environment setup, see [evaluation/README.md](evaluation/README.md)**
-
-</div>
