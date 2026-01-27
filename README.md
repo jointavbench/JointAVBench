@@ -141,8 +141,8 @@ python evaluation.py --qa-path ../data/benchmark.json --model-name gemini --moda
 
 We provide evaluation scripts for 10+ models:
 
-- **API-based**: Gemini, GPT-4V, Kimi-Audio
-- **Open-source**: LLaVA-Video, InternVL, Qwen-VL/Audio/Omni, Video-LLaMA 2/3, VITA, AVicuna
+- **API-based**: Gemini, GPT-4o, Kimi-Audio
+- **Open-source**: LLaVA-Video, InternVL, Qwen-VL/Audio/Omni, Video-LLaMA 2/3, AVicuna
 
 See [evaluation/README.md](evaluation/README.md) for complete setup and usage instructions.
 
