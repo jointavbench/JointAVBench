@@ -4,7 +4,7 @@
 
 [![Paper](https://img.shields.io/badge/Paper-PDF-red)](https://arxiv.org/pdf/2512.12772)
 [![Project Page](https://img.shields.io/badge/Project-Page-purple)](https://jointavbench.github.io)
-[![Hugging Face](https://img.shields.io/badge/🤗-Benchmark-yellow)](https://huggingface.co/datasets/JointAVBench/JointAVBench/tree/main)
+[![Hugging Face](https://img.shields.io/badge/🤗-Benchmark-yellow)](https://huggingface.co/datasets/JointAVBench/JointAVBench)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 </div>
