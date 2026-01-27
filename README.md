@@ -17,13 +17,13 @@
 
 ### ✨ Key Features
 
-- **Large-scale Benchmark**: 2,853 questions across 103 videos with 15 diverse task types
+- **Large-scale Benchmark**: 2,853 questions across 15 diverse task types
 - **Automated Generation Pipeline**: State-of-the-art vision-LLMs, audio-LLMs, and LLMs automatically synthesize questions requiring joint audio-visual reasoning
 - **Multi-dimensional Coverage**:
   - **5 cognitive dimensions**: Temporal, Spatial, Long-form, Emotional, and Plot understanding
   - **4 audio information types**: Speech, Sound events, Music, and Speech emotion
   - **3 scene spans**: Single-scene, Multi-scene, and Full-scene reasoning
-- **Comprehensive Evaluation**: Evaluation suite for 18+ mainstream omni-modal models
+- **Comprehensive Evaluation**: Evaluation suite for majority mainstream omni-modal models
 - **Challenging Tasks**: Multi-scene tasks requiring complex cross-modal reasoning
 
 ### 📄 Abstract
