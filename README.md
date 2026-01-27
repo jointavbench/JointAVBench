@@ -173,6 +173,11 @@ Our benchmark reveals significant challenges for current omni-modal models:
 - **Single-scene Tasks**: Relatively better (68% accuracy)
 - **Performance Gaps**: Significant variations across cognitive dimensions and audio types
 
+<div align="center">
+  <img src="./images/results.png" alt="JointAVBench Results" width="90%">
+  <p><em>Performance comparison of different models across task categories</em></p>
+</div>
+
 ### 🔍 Key Findings
 
 1. **Multi-modal Reasoning is Hard**: Even top models struggle to integrate audio-visual information effectively
