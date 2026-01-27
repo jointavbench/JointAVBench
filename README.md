@@ -48,23 +48,23 @@ This paper introduces **JointAVBench**, a dataset designed to answer questions t
 
 JointAVBench consists of **2,853 questions** across **15 distinct tasks** spanning multiple dimensions:
 
-| Task | Cognitive Ability | Audio Type | Scene Span | Questions | Description |
-|------|------------------|------------|------------|-----------|-------------|
-| STL | Long-form | Speech | Single | 115 | Speech-to-location (objects mentioned in dialogue but not shown visually) |
-| SPER | Emotional | Speech Emotion | Single | 301 | Speech emotion recognition (identifying speaker's emotional tone) |
-| SPL | Spatial | Speech | Single | 224 | Speaker localization (where is the character saying X?) |
-| SOOG | Spatial | Sound Event | Single | 296 | Sound object grounding (spatial position of sound source) |
-| SOER | Spatial | Sound Event | Single | 360 | Sound object event recognition (what makes the sound?) |
-| MPTI | Emotional | Music | Single | 276 | Music-based atmosphere perception (overall scene atmosphere) |
-| VSSR | Temporal | Speech + Video | Multi | 230 | Video-speech sequential reasoning (ordering of events/dialogue) |
-| PTG | Temporal | Speech | Multi | 149 | Plot temporal grounding (when did X happen?) |
-| CSA | Long-form | Speech | Multi | 121 | Cross-scene association (relevant dialogue across scenes) |
-| AVDM | Temporal | Speech + Video | Multi | 110 | Audio-visual dialogue matching (what was X doing when Y said Z?) |
-| MPO | Temporal | Speech + Sound | Multi | 104 | Multi-scene plot ordering (sequence of events across segments) |
-| AFA | Plot | Sound + Music | Multi | 176 | Audio-visual feature alignment (how video depicts movement via audio) |
-| CRI | Plot | Speech | Full | 165 | Character relationship identification (relationships between characters) |
-| MESI | Emotional | Music + Speech | Full | 133 | Multi-scene emotional shift (emotional tone evolution) |
-| PDP | Plot | Speech + Video | Full | 93 | Plot development prediction (what happens next?) |
+| Task | Cognitive Ability | Audio Type | Scene Span | Description |
+|------|------------------|------------|------------|-------------|
+| STL | Long-form | Speech | Single | Speech-to-location (objects mentioned in dialogue but not shown visually) |
+| SPER | Emotional | Speech Emotion | Single | Speech emotion recognition (identifying speaker's emotional tone) |
+| SPL | Spatial | Speech | Single | Speaker localization (where is the character saying X?) |
+| SOOG | Spatial | Sound Event | Single | Sound object grounding (spatial position of sound source) |
+| SOER | Spatial | Sound Event | Single | Sound object event recognition (what makes the sound?) |
+| MPTI | Emotional | Music | Single | Music-based atmosphere perception (overall scene atmosphere) |
+| VSSR | Temporal | Speech + Video | Multi | Video-speech sequential reasoning (ordering of events/dialogue) |
+| PTG | Temporal | Speech | Multi | Plot temporal grounding (when did X happen?) |
+| CSA | Long-form | Speech | Multi | Cross-scene association (relevant dialogue across scenes) |
+| AVDM | Temporal | Speech + Video | Multi | Audio-visual dialogue matching (what was X doing when Y said Z?) |
+| MPO | Temporal | Speech + Sound | Multi | Multi-scene plot ordering (sequence of events across segments) |
+| AFA | Plot | Sound + Music | Multi | Audio-visual feature alignment (how video depicts movement via audio) |
+| CRI | Plot | Speech | Full | Character relationship identification (relationships between characters) |
+| MESI | Emotional | Music + Speech | Full | Multi-scene emotional shift (emotional tone evolution) |
+| PDP | Plot | Speech + Video | Full | Plot development prediction (what happens next?) |
 
 ### 🎨 Example Questions
 
@@ -103,7 +103,7 @@ pip install huggingface_hub
 huggingface-cli download JointAVBench/JointAVBench --local-dir ./data
 ```
 
-The benchmark file `jointavbench.json` contains all 2,853 questions with metadata.
+The benchmark file `jointavbench.json` contains all 2,853 questions with metadata. Please note that due to content restrictions, we cannot share the raw videos. However, we provide a url to the original YouTube video for each question.
 
 ### 📂 Dataset Structure
 
