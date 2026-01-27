@@ -46,25 +46,7 @@ This paper introduces **JointAVBench**, a dataset designed to answer questions t
 
 ### 📊 Task Categories
 
-JointAVBench consists of **2,853 questions** across **15 distinct tasks** spanning multiple dimensions:
-
-| Task | Cognitive Ability | Audio Type | Scene Span | Description |
-|------|------------------|------------|------------|-------------|
-| STL | Long-form | Speech | Single | Speech-to-location (objects mentioned in dialogue but not shown visually) |
-| SPER | Emotional | Speech Emotion | Single | Speech emotion recognition (identifying speaker's emotional tone) |
-| SPL | Spatial | Speech | Single | Speaker localization (where is the character saying X?) |
-| SOOG | Spatial | Sound Event | Single | Sound object grounding (spatial position of sound source) |
-| SOER | Spatial | Sound Event | Single | Sound object event recognition (what makes the sound?) |
-| MPTI | Emotional | Music | Single | Music-based atmosphere perception (overall scene atmosphere) |
-| VSSR | Temporal | Speech + Video | Multi | Video-speech sequential reasoning (ordering of events/dialogue) |
-| PTG | Temporal | Speech | Multi | Plot temporal grounding (when did X happen?) |
-| CSA | Long-form | Speech | Multi | Cross-scene association (relevant dialogue across scenes) |
-| AVDM | Temporal | Speech + Video | Multi | Audio-visual dialogue matching (what was X doing when Y said Z?) |
-| MPO | Temporal | Speech + Sound | Multi | Multi-scene plot ordering (sequence of events across segments) |
-| AFA | Plot | Sound + Music | Multi | Audio-visual feature alignment (how video depicts movement via audio) |
-| CRI | Plot | Speech | Full | Character relationship identification (relationships between characters) |
-| MESI | Emotional | Music + Speech | Full | Multi-scene emotional shift (emotional tone evolution) |
-| PDP | Plot | Speech + Video | Full | Plot development prediction (what happens next?) |
+JointAVBench consists of **2,853 questions** across **15 distinct tasks** spanning multiple dimensions. Details about each task category can be found in the [paper](https://arxiv.org/pdf/2512.12772).
 
 ### 🎨 Example Questions
 
