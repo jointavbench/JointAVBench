@@ -92,6 +92,7 @@ The benchmark file `jointavbench.json` contains all 2,853 questions with metadat
 ```
 JointAVBench/
 ├── video_annotations.json      # Annotation data
+├── subtitle.zip                # Video subtitle data
 ├── jointavbench.json           # Evaluation code
 ├── README.md
 ```
