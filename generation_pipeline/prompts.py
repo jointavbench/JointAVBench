@@ -121,7 +121,7 @@ Please follow these steps to complete your evaluation:
     - Determine if the question can be answered using only the extracted audio text and common sense.
     If the question requires information from both the video text and the audio text to be answered, then it is considered feasible to use both modalities.
 3. Conclusion: 
-    Provide your final determination: Output [YES] if the question explicitly requires information from both video and audio modalities to be answered correctly, or if the answer and explanation rely on information from both modalities. Otherwise, output [YES].
+    Provide your final determination: Output [YES] if the question explicitly requires information from both video and audio modalities to be answered correctly, or if the answer and explanation rely on information from both modalities. Otherwise, output [NO].
 Additional Rules:
     - Some question may explicitly indicating the exclusion of specific visual information. Please count such questions as in need of visual information.
     - Note that subtitle text is audio modality (since subtitle text is transcribed from speech content). 
